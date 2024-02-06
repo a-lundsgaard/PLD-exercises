@@ -132,6 +132,7 @@ let rec eval s localEnv =
            printf "! %s\n" "File ended before expression was complete"
          ; infile.Close ())
       ; Nil
+
   | Cons (Symbol "let", Cons (p, Cons (e1, Cons (e2, Nil)))) ->
       let v = eval e1 localEnv
       (match matchPattern p v with
@@ -140,11 +141,36 @@ let rec eval s localEnv =
                                 + " did not match the value "
                                 + showSexpIndent v 30 30))
        | Some env -> eval e2 (env @ localEnv))
+
+  | Cons (Symbol "let", bindingsAndBody) ->
+      let rec extendEnv bindings localEnv =
+        match bindings with
+        Cons (p, Cons (e1, Cons (e2, Nil))) -> // body expression
+          let v = eval e1 localEnv
+          (match matchPattern p v with
+          | None -> raise (Lerror ("The pattern "
+                                    + showSexpIndent p 12 12
+                                    + " did not match the value "
+                                    + showSexpIndent v 30 30))
+          | Some env -> eval e2 (env @ localEnv))
+          
+        | Cons (x, Cons (p, rest)) -> // nested bindings
+            printf "\nPattern: %A\n" x
+            printf "\nPattern2: %A\n" p
+            let v = eval p localEnv
+            match matchPattern x v with
+            | None -> raise (Lerror ("Pattern " + showSexp p + " does not match value " + showSexp v))
+            | Some env ->
+                printf "New bindings: %A\n" env
+                extendEnv rest (env @ localEnv) // Extend environment and proceed with rest
+        | body ->
+            eval body localEnv
+      extendEnv bindingsAndBody localEnv
+
   | Cons (e1, args) -> // function application
       applyFun (eval e1 localEnv, evalList args localEnv, localEnv)
 
 // apply function to arguments
-
 and applyFun (fnc, pars, localEnv) =
       match fnc with
       | Symbol x when (List.contains x unops) ->

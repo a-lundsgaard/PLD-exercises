@@ -45,9 +45,13 @@ let updateGlobal x v =
 
 exception Lerror of string
 
+// assignment 1
+type LispException = Lexception of Sexp
+exception LispError of LispException
+
 // specials do not evaluate (all) their arguments
 let specials =
-  ["quote"; "lambda"; "\\"; "if"; "define"; "save"; "load"; "let"]
+  ["quote"; "lambda"; "\\"; "if"; "define"; "save"; "load"; "let"; "try"; "catch"; "throw"]
 
 // unary operators
 let unops = ["number?"; "symbol?"]
@@ -66,6 +70,7 @@ let predefined = specials @ operators
 // if error raise exception Lerror message
 
 let rec eval s localEnv =
+  // printfn "All print %A" s
   match s with
   | Nil -> Nil
   | Num _ -> s // numbers evaluate to themselves
@@ -82,7 +87,24 @@ let rec eval s localEnv =
          // a statically scoped function builds a closure
          // of the function and the local environment at its definition
   | Cons (Symbol "lambda", rules) -> s
-        // multi-way conditional
+
+  | Cons (Symbol "try", Cons (tryExpr, Cons (Cons (Symbol "catch", Cons (Cons (Symbol _, Cons (Symbol catchVar, Nil)), Cons (catchBody, Nil))), Nil))) ->
+      try
+          let tryResult = eval tryExpr localEnv
+          tryResult
+      with
+      | LispError (Lexception value) ->
+          // Prepare a new environment for the catch block, binding the exception value to catchVar
+          let newEnv = (catchVar, value) :: localEnv
+          // Evaluate the catch block with the new environment
+          eval catchBody newEnv
+
+  | Cons (Symbol "throw", Cons (e, Nil)) ->
+    let value = eval e localEnv
+    printfn "Throwing exception %A %A: " value localEnv
+    // print the error message
+    raise (LispError (Lexception value))
+
   | Cons (Symbol "if", es) ->
        match es with
        | Nil -> Nil
